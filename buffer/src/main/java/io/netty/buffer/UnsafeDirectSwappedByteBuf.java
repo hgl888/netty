@@ -18,23 +18,16 @@ package io.netty.buffer;
 
 import io.netty.util.internal.PlatformDependent;
 
-import java.nio.ByteOrder;
-
 /**
  * Special {@link SwappedByteBuf} for {@link ByteBuf}s that are backed by a {@code memoryAddress}.
  */
-final class UnsafeDirectSwappedByteBuf extends SwappedByteBuf {
-    private static final boolean NATIVE_ORDER = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN;
-    private final boolean nativeByteOrder;
-    private final AbstractByteBuf wrapped;
+final class UnsafeDirectSwappedByteBuf extends AbstractUnsafeSwappedByteBuf {
 
     UnsafeDirectSwappedByteBuf(AbstractByteBuf buf) {
         super(buf);
-        wrapped = buf;
-        nativeByteOrder = NATIVE_ORDER == (order() == ByteOrder.BIG_ENDIAN);
     }
 
-    private long addr(int index) {
+    private static long addr(AbstractByteBuf wrapped, int index) {
         // We need to call wrapped.memoryAddress() everytime and NOT cache it as it may change if the buffer expand.
         // See:
         // - https://github.com/netty/netty/issues/2587
@@ -43,144 +36,32 @@ final class UnsafeDirectSwappedByteBuf extends SwappedByteBuf {
     }
 
     @Override
-    public long getLong(int index) {
-        wrapped.checkIndex(index, 8);
-        long v = PlatformDependent.getLong(addr(index));
-        return nativeByteOrder? v : Long.reverseBytes(v);
+    protected long _getLong(AbstractByteBuf wrapped, int index) {
+        return PlatformDependent.getLong(addr(wrapped, index));
     }
 
     @Override
-    public float getFloat(int index) {
-        return Float.intBitsToFloat(getInt(index));
+    protected int _getInt(AbstractByteBuf wrapped, int index) {
+        return PlatformDependent.getInt(addr(wrapped, index));
     }
 
     @Override
-    public double getDouble(int index) {
-        return Double.longBitsToDouble(getLong(index));
+    protected short _getShort(AbstractByteBuf wrapped, int index) {
+        return PlatformDependent.getShort(addr(wrapped, index));
     }
 
     @Override
-    public char getChar(int index) {
-        return (char) getShort(index);
+    protected void _setShort(AbstractByteBuf wrapped, int index, short value) {
+        PlatformDependent.putShort(addr(wrapped, index), value);
     }
 
     @Override
-    public long getUnsignedInt(int index) {
-        return getInt(index) & 0xFFFFFFFFL;
+    protected void _setInt(AbstractByteBuf wrapped, int index, int value) {
+        PlatformDependent.putInt(addr(wrapped, index), value);
     }
 
     @Override
-    public int getInt(int index) {
-        wrapped.checkIndex(index, 4);
-        int v = PlatformDependent.getInt(addr(index));
-        return nativeByteOrder? v : Integer.reverseBytes(v);
-    }
-
-    @Override
-    public int getUnsignedShort(int index) {
-        return getShort(index) & 0xFFFF;
-    }
-
-    @Override
-    public short getShort(int index) {
-        wrapped.checkIndex(index, 2);
-        short v = PlatformDependent.getShort(addr(index));
-        return nativeByteOrder? v : Short.reverseBytes(v);
-    }
-
-    @Override
-    public ByteBuf setShort(int index, int value) {
-        wrapped.checkIndex(index, 2);
-        _setShort(index, value);
-        return this;
-    }
-
-    @Override
-    public ByteBuf setInt(int index, int value) {
-        wrapped.checkIndex(index, 4);
-        _setInt(index, value);
-        return this;
-    }
-
-    @Override
-    public ByteBuf setLong(int index, long value) {
-        wrapped.checkIndex(index, 8);
-        _setLong(index, value);
-        return this;
-    }
-
-    @Override
-    public ByteBuf setChar(int index, int value) {
-        setShort(index, value);
-        return this;
-    }
-
-    @Override
-    public ByteBuf setFloat(int index, float value) {
-        setInt(index, Float.floatToRawIntBits(value));
-        return this;
-    }
-
-    @Override
-    public ByteBuf setDouble(int index, double value) {
-        setLong(index, Double.doubleToRawLongBits(value));
-        return this;
-    }
-
-    @Override
-    public ByteBuf writeShort(int value) {
-        wrapped.ensureAccessible();
-        wrapped.ensureWritable(2);
-        _setShort(wrapped.writerIndex, value);
-        wrapped.writerIndex += 2;
-        return this;
-    }
-
-    @Override
-    public ByteBuf writeInt(int value) {
-        wrapped.ensureAccessible();
-        wrapped.ensureWritable(4);
-        _setInt(wrapped.writerIndex, value);
-        wrapped.writerIndex += 4;
-        return this;
-    }
-
-    @Override
-    public ByteBuf writeLong(long value) {
-        wrapped.ensureAccessible();
-        wrapped.ensureWritable(8);
-        _setLong(wrapped.writerIndex, value);
-        wrapped.writerIndex += 8;
-        return this;
-    }
-
-    @Override
-    public ByteBuf writeChar(int value) {
-        writeShort(value);
-        return this;
-    }
-
-    @Override
-    public ByteBuf writeFloat(float value) {
-        writeInt(Float.floatToRawIntBits(value));
-        return this;
-    }
-
-    @Override
-    public ByteBuf writeDouble(double value) {
-        writeLong(Double.doubleToRawLongBits(value));
-        return this;
-    }
-
-    private void _setShort(int index, int value) {
-        PlatformDependent.putShort(addr(index), nativeByteOrder ? (short) value : Short.reverseBytes((short) value));
-    }
-
-    private void _setInt(int index, int value) {
-        PlatformDependent.putInt(addr(index), nativeByteOrder ? value : Integer.reverseBytes(value));
-    }
-
-    private void _setLong(int index, long value) {
-        PlatformDependent.putLong(addr(index), nativeByteOrder ? value : Long.reverseBytes(value));
+    protected void _setLong(AbstractByteBuf wrapped, int index, long value) {
+        PlatformDependent.putLong(addr(wrapped, index), value);
     }
 }

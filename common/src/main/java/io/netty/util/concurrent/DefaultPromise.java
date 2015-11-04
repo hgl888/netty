@@ -817,12 +817,17 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         } else if (result == UNCANCELLABLE) {
             buf.append("(uncancellable)");
         } else if (result instanceof CauseHolder) {
-            buf.append("(failure(")
+            buf.append("(failure: ")
                .append(((CauseHolder) result).cause)
+               .append(')');
+        } else if (result != null) {
+            buf.append("(success: ")
+               .append(result)
                .append(')');
         } else {
             buf.append("(incomplete)");
         }
+
         return buf;
     }
 
@@ -836,7 +841,8 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
 
         @Override
         public void run() {
-            if (listeners == null) {
+            final EventExecutor executor = executor();
+            if (listeners == null || executor == ImmediateEventExecutor.INSTANCE) {
                 for (;;) {
                     GenericFutureListener<?> l = poll();
                     if (l == null) {
@@ -847,7 +853,7 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
             } else {
                 // Reschedule until the initial notification is done to avoid the race condition
                 // where the notification is made in an incorrect order.
-                execute(executor(), this);
+                execute(executor, this);
             }
         }
     }

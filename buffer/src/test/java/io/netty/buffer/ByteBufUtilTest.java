@@ -27,6 +27,8 @@ import java.util.Random;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.nio.charset.Charset;
+
 public class ByteBufUtilTest {
     @Test
     public void equalsBufferSubsections() {
@@ -42,6 +44,10 @@ public class ByteBufUtilTest {
         assertTrue(ByteBufUtil.equals(Unpooled.wrappedBuffer(b1), iB1, Unpooled.wrappedBuffer(b2), iB2, length));
     }
 
+    private static int random(Random r, int min, int max) {
+        return r.nextInt((max - min) + 1) + min;
+    }
+
     @Test
     public void notEqualsBufferSubsections() {
         byte[] b1 = new byte[50];
@@ -52,20 +58,11 @@ public class ByteBufUtilTest {
         final int iB1 = b1.length / 2;
         final int iB2 = iB1 + b1.length;
         final int length = b1.length - iB1;
-        // Even though we choose random values...make sure they are not equal.
-        final int copyLength = length - 1;
-        final int end = iB1 + copyLength;
-        boolean foundDiff = false;
-        for (int i = iB1, j = iB2; i < end; ++i, ++j) {
-            if (b1[i] != b2[j]) {
-                foundDiff = true;
-                break;
-            }
-        }
-        if (!foundDiff) {
-            ++b1[iB1];
-        }
-        System.arraycopy(b1, iB1, b2, iB2, copyLength);
+        System.arraycopy(b1, iB1, b2, iB2, length);
+        // Randomly pick an index in the range that will be compared and make the value at that index differ between
+        // the 2 arrays.
+        int diffIndex = random(rand, iB1, iB1 + length - 1);
+        ++b1[diffIndex];
         assertFalse(ByteBufUtil.equals(Unpooled.wrappedBuffer(b1), iB1, Unpooled.wrappedBuffer(b2), iB2, length));
     }
 
@@ -111,6 +108,19 @@ public class ByteBufUtilTest {
     }
 
     @Test
+    public void testWriteUsAsciiWrapped() {
+        String usAscii = "NettyRocks";
+        ByteBuf buf = Unpooled.unreleasableBuffer(ReferenceCountUtil.releaseLater(Unpooled.buffer(16)));
+        assertWrapped(buf);
+        buf.writeBytes(usAscii.getBytes(CharsetUtil.US_ASCII));
+        ByteBuf buf2 = Unpooled.unreleasableBuffer(ReferenceCountUtil.releaseLater(Unpooled.buffer(16)));
+        assertWrapped(buf2);
+        ByteBufUtil.writeAscii(buf2, usAscii);
+
+        Assert.assertEquals(buf, buf2);
+    }
+
+    @Test
     public void testWriteUtf8() {
         String usAscii = "Some UTF-8 like äÄ∏ŒŒ";
         ByteBuf buf = ReferenceCountUtil.releaseLater(Unpooled.buffer(16));
@@ -130,5 +140,38 @@ public class ByteBufUtilTest {
         ByteBufUtil.writeAscii(buf2, usAscii);
 
         Assert.assertEquals(buf, buf2);
+    }
+
+    @Test
+    public void testWriteUtf8Wrapped() {
+        String usAscii = "Some UTF-8 like äÄ∏ŒŒ";
+        ByteBuf buf = Unpooled.unreleasableBuffer(ReferenceCountUtil.releaseLater(Unpooled.buffer(16)));
+        assertWrapped(buf);
+        buf.writeBytes(usAscii.getBytes(CharsetUtil.UTF_8));
+        ByteBuf buf2 = Unpooled.unreleasableBuffer(ReferenceCountUtil.releaseLater(Unpooled.buffer(16)));
+        assertWrapped(buf2);
+        ByteBufUtil.writeUtf8(buf2, usAscii);
+
+        Assert.assertEquals(buf, buf2);
+    }
+
+    private static void assertWrapped(ByteBuf buf) {
+        assertTrue(buf instanceof WrappedByteBuf);
+    }
+
+    @Test
+    public void testDecodeUsAscii() {
+        testDecodeString("This is a test", CharsetUtil.US_ASCII);
+    }
+
+    @Test
+    public void testDecodeUtf8() {
+        testDecodeString("Some UTF-8 like äÄ∏ŒŒ", CharsetUtil.UTF_8);
+    }
+
+    private static void testDecodeString(String text, Charset charset) {
+        ByteBuf buffer = Unpooled.copiedBuffer(text, charset);
+        Assert.assertEquals(text, ByteBufUtil.decodeString(buffer, 0, buffer.readableBytes(), charset));
+        buffer.release();
     }
 }

@@ -20,7 +20,7 @@ import org.junit.Test;
 import java.io.IOException;
 import java.util.Random;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 /**
  * Tests sliced channel buffers
@@ -28,19 +28,13 @@ import static org.junit.Assert.assertEquals;
 public class SlicedByteBufTest extends AbstractByteBufTest {
 
     private final Random random = new Random();
-    private ByteBuf buffer;
 
     @Override
     protected ByteBuf newBuffer(int length) {
-        buffer = Unpooled.wrappedBuffer(
+        ByteBuf buffer = Unpooled.wrappedBuffer(
                 new byte[length * 2], random.nextInt(length - 1) + 1, length);
         assertEquals(length, buffer.writerIndex());
         return buffer;
-    }
-
-    @Override
-    protected ByteBuf[] components() {
-        return new ByteBuf[] { buffer };
     }
 
     @Test(expected = NullPointerException.class)
@@ -136,5 +130,28 @@ public class SlicedByteBufTest extends AbstractByteBufTest {
         } finally {
             wrapped.release();
         }
+    }
+
+    @Test
+    public void sliceEmptyNotLeak() {
+        ByteBuf buffer = Unpooled.buffer(8).retain();
+        assertEquals(2, buffer.refCnt());
+
+        ByteBuf slice1 = buffer.slice();
+        assertEquals(2, slice1.refCnt());
+
+        ByteBuf slice2 = slice1.slice();
+        assertEquals(2, slice2.refCnt());
+
+        assertFalse(slice2.release());
+        assertEquals(1, buffer.refCnt());
+        assertEquals(1, slice1.refCnt());
+        assertEquals(1, slice2.refCnt());
+
+        assertTrue(slice2.release());
+
+        assertEquals(0, buffer.refCnt());
+        assertEquals(0, slice1.refCnt());
+        assertEquals(0, slice2.refCnt());
     }
 }

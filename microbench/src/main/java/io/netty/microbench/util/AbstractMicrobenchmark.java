@@ -18,7 +18,7 @@ package io.netty.microbench.util;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import io.netty.util.internal.SystemPropertyUtil;
 
-import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -36,8 +36,8 @@ public class AbstractMicrobenchmark extends AbstractMicrobenchmarkBase {
 
     static {
         final String[] customArgs = {
-        "-Xms768m", "-Xmx768m", "-XX:MaxDirectMemorySize=768m", "-Dharness.executor=CUSTOM",
-        "-Dharness.executor.class=AbstractMicrobenchmark$HarnessExecutor" };
+        "-Xms768m", "-Xmx768m", "-XX:MaxDirectMemorySize=768m", "-Djmh.executor=CUSTOM",
+        "-Djmh.executor.class=io.netty.microbench.util.AbstractMicrobenchmark$HarnessExecutor" };
 
         JVM_ARGS = new String[BASE_JVM_ARGS.length + customArgs.length];
         System.arraycopy(BASE_JVM_ARGS, 0, JVM_ARGS, 0, BASE_JVM_ARGS.length);
@@ -46,8 +46,8 @@ public class AbstractMicrobenchmark extends AbstractMicrobenchmarkBase {
 
     public static final class HarnessExecutor extends ThreadPoolExecutor {
         public HarnessExecutor(int maxThreads, String prefix) {
-            super(0, maxThreads, 1L, TimeUnit.DAYS, new SynchronousQueue<Runnable>(),
-                  new DefaultThreadFactory(prefix));
+            super(maxThreads, maxThreads, 0, TimeUnit.MILLISECONDS,
+                    new LinkedBlockingQueue<Runnable>(), new DefaultThreadFactory(prefix));
             System.out.println("Using harness executor");
         }
     }
@@ -59,7 +59,6 @@ public class AbstractMicrobenchmark extends AbstractMicrobenchmarkBase {
 
     protected ChainedOptionsBuilder newOptionsBuilder() throws Exception {
         ChainedOptionsBuilder runnerOptions = super.newOptionsBuilder();
-
         if (getForks() > 0) {
             runnerOptions.forks(getForks());
         }

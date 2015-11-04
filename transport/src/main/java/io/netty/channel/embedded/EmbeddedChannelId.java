@@ -41,7 +41,7 @@ final class EmbeddedChannelId implements ChannelId {
 
     @Override
     public int compareTo(ChannelId o) {
-        if (o == INSTANCE) {
+        if (o instanceof EmbeddedChannelId) {
             return 0;
         }
 
@@ -50,12 +50,12 @@ final class EmbeddedChannelId implements ChannelId {
 
     @Override
     public int hashCode() {
-        return super.hashCode();
+        return 0;
     }
 
     @Override
     public boolean equals(Object obj) {
-        return super.equals(obj);
+        return obj instanceof EmbeddedChannelId;
     }
 
     @Override

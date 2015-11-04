@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.List;
 
 abstract class PoolArena<T> implements PoolArenaMetric {
+    static final boolean HAS_UNSAFE = PlatformDependent.hasUnsafe();
 
     enum SizeClass {
         Tiny,
@@ -182,8 +183,8 @@ abstract class PoolArena<T> implements PoolArenaMetric {
             final PoolSubpage<T> head = table[tableIdx];
 
             /**
-             * Synchronize on the head. This is needed as {@link PoolSubpage#allocate()} and
-             * {@link PoolSubpage#free(int)} may modify the doubly linked list as well.
+             * Synchronize on the head. This is needed as {@link PoolChunk#allocateSubpage(int)} and
+             * {@link PoolChunk#free(long)} may modify the doubly linked list as well.
              */
             synchronized (head) {
                 final PoolSubpage<T> s = head.next;
@@ -614,7 +615,8 @@ abstract class PoolArena<T> implements PoolArenaMetric {
 
         @Override
         protected PooledByteBuf<byte[]> newByteBuf(int maxCapacity) {
-            return PooledHeapByteBuf.newInstance(maxCapacity);
+            return HAS_UNSAFE ? PooledUnsafeHeapByteBuf.newUnsafeInstance(maxCapacity)
+                    : PooledHeapByteBuf.newInstance(maxCapacity);
         }
 
         @Override
@@ -628,8 +630,6 @@ abstract class PoolArena<T> implements PoolArenaMetric {
     }
 
     static final class DirectArena extends PoolArena<ByteBuffer> {
-
-        private static final boolean HAS_UNSAFE = PlatformDependent.hasUnsafe();
 
         DirectArena(PooledByteBufAllocator parent, int pageSize, int maxOrder, int pageShifts, int chunkSize) {
             super(parent, pageSize, maxOrder, pageShifts, chunkSize);

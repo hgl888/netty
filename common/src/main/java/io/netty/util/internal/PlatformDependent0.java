@@ -23,7 +23,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -39,9 +38,8 @@ final class PlatformDependent0 {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(PlatformDependent0.class);
     static final Unsafe UNSAFE;
-    private static final boolean BIG_ENDIAN = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN;
     private static final long ADDRESS_FIELD_OFFSET;
-    private static final long ARRAY_BASE_OFFSET;
+    private static final long BYTE_ARRAY_BASE_OFFSET;
 
     /**
      * Limits the number of bytes to copy per {@link Unsafe#copyMemory(long, long, long)} to allow safepoint polling
@@ -49,11 +47,6 @@ final class PlatformDependent0 {
      */
     private static final long UNSAFE_COPY_THRESHOLD = 1024L * 1024L;
 
-    /**
-     * {@code true} if and only if the platform supports unaligned access.
-     *
-     * @see <a href="http://en.wikipedia.org/wiki/Segmentation_fault#Bus_error">Wikipedia on segfault</a>
-     */
     private static final boolean UNALIGNED;
 
     static {
@@ -115,11 +108,11 @@ final class PlatformDependent0 {
 
         if (unsafe == null) {
             ADDRESS_FIELD_OFFSET = -1;
-            ARRAY_BASE_OFFSET = -1;
+            BYTE_ARRAY_BASE_OFFSET = -1;
             UNALIGNED = false;
         } else {
             ADDRESS_FIELD_OFFSET = objectFieldOffset(addressField);
-            ARRAY_BASE_OFFSET = UNSAFE.arrayBaseOffset(byte[].class);
+            BYTE_ARRAY_BASE_OFFSET = UNSAFE.arrayBaseOffset(byte[].class);
             boolean unaligned;
             try {
                 Class<?> bitsClass = Class.forName("java.nio.Bits", false, ClassLoader.getSystemClassLoader());
@@ -136,6 +129,10 @@ final class PlatformDependent0 {
             UNALIGNED = unaligned;
             logger.debug("java.nio.Bits.unaligned: {}", UNALIGNED);
         }
+    }
+
+    static boolean isUnaligned() {
+        return UNALIGNED;
     }
 
     static boolean hasUnsafe() {
@@ -161,8 +158,8 @@ final class PlatformDependent0 {
         return getLong(buffer, ADDRESS_FIELD_OFFSET);
     }
 
-    static long arrayBaseOffset() {
-        return ARRAY_BASE_OFFSET;
+    static long byteArrayBaseOffset() {
+        return BYTE_ARRAY_BASE_OFFSET;
     }
 
     static Object getObject(Object object, long fieldOffset) {
@@ -190,53 +187,31 @@ final class PlatformDependent0 {
     }
 
     static short getShort(long address) {
-        if (UNALIGNED) {
-            return UNSAFE.getShort(address);
-        } else if (BIG_ENDIAN) {
-            return (short) (getByte(address) << 8 | getByte(address + 1) & 0xff);
-        } else {
-            return (short) (getByte(address + 1) << 8 | getByte(address) & 0xff);
-        }
+        return UNSAFE.getShort(address);
     }
 
     static int getInt(long address) {
-        if (UNALIGNED) {
-            return UNSAFE.getInt(address);
-        } else if (BIG_ENDIAN) {
-            return getByte(address) << 24 |
-                  (getByte(address + 1) & 0xff) << 16 |
-                  (getByte(address + 2) & 0xff) <<  8 |
-                   getByte(address + 3) & 0xff;
-        } else {
-            return getByte(address + 3) << 24 |
-                  (getByte(address + 2) & 0xff) << 16 |
-                  (getByte(address + 1) & 0xff) <<  8 |
-                   getByte(address) & 0xff;
-        }
+        return UNSAFE.getInt(address);
     }
 
     static long getLong(long address) {
-        if (UNALIGNED) {
-            return UNSAFE.getLong(address);
-        } else if (BIG_ENDIAN) {
-            return (long) getByte(address) << 56 |
-                  ((long) getByte(address + 1) & 0xff) << 48 |
-                  ((long) getByte(address + 2) & 0xff) << 40 |
-                  ((long) getByte(address + 3) & 0xff) << 32 |
-                  ((long) getByte(address + 4) & 0xff) << 24 |
-                  ((long) getByte(address + 5) & 0xff) << 16 |
-                  ((long) getByte(address + 6) & 0xff) <<  8 |
-                   (long) getByte(address + 7) & 0xff;
-        } else {
-            return (long) getByte(address + 7) << 56 |
-                  ((long) getByte(address + 6) & 0xff) << 48 |
-                  ((long) getByte(address + 5) & 0xff) << 40 |
-                  ((long) getByte(address + 4) & 0xff) << 32 |
-                  ((long) getByte(address + 3) & 0xff) << 24 |
-                  ((long) getByte(address + 2) & 0xff) << 16 |
-                  ((long) getByte(address + 1) & 0xff) <<  8 |
-                   (long) getByte(address) & 0xff;
-        }
+        return UNSAFE.getLong(address);
+    }
+
+    static byte getByte(byte[] data, int index) {
+        return UNSAFE.getByte(data, BYTE_ARRAY_BASE_OFFSET + index);
+    }
+
+    static short getShort(byte[] data, int index) {
+        return UNSAFE.getShort(data, BYTE_ARRAY_BASE_OFFSET + index);
+    }
+
+    static int getInt(byte[] data, int index) {
+        return UNSAFE.getInt(data, BYTE_ARRAY_BASE_OFFSET + index);
+    }
+
+    static long getLong(byte[] data, int index) {
+        return UNSAFE.getLong(data, BYTE_ARRAY_BASE_OFFSET + index);
     }
 
     static void putOrderedObject(Object object, long address, Object value) {
@@ -248,55 +223,31 @@ final class PlatformDependent0 {
     }
 
     static void putShort(long address, short value) {
-        if (UNALIGNED) {
-            UNSAFE.putShort(address, value);
-        } else if (BIG_ENDIAN) {
-            putByte(address, (byte) (value >>> 8));
-            putByte(address + 1, (byte) value);
-        } else {
-            putByte(address + 1, (byte) (value >>> 8));
-            putByte(address, (byte) value);
-        }
+        UNSAFE.putShort(address, value);
     }
 
     static void putInt(long address, int value) {
-        if (UNALIGNED) {
-            UNSAFE.putInt(address, value);
-        } else if (BIG_ENDIAN) {
-            putByte(address, (byte) (value >>> 24));
-            putByte(address + 1, (byte) (value >>> 16));
-            putByte(address + 2, (byte) (value >>> 8));
-            putByte(address + 3, (byte) value);
-        } else {
-            putByte(address + 3, (byte) (value >>> 24));
-            putByte(address + 2, (byte) (value >>> 16));
-            putByte(address + 1, (byte) (value >>> 8));
-            putByte(address, (byte) value);
-        }
+        UNSAFE.putInt(address, value);
     }
 
     static void putLong(long address, long value) {
-        if (UNALIGNED) {
-            UNSAFE.putLong(address, value);
-        } else if (BIG_ENDIAN) {
-            putByte(address, (byte) (value >>> 56));
-            putByte(address + 1, (byte) (value >>> 48));
-            putByte(address + 2, (byte) (value >>> 40));
-            putByte(address + 3, (byte) (value >>> 32));
-            putByte(address + 4, (byte) (value >>> 24));
-            putByte(address + 5, (byte) (value >>> 16));
-            putByte(address + 6, (byte) (value >>> 8));
-            putByte(address + 7, (byte) value);
-        } else {
-            putByte(address + 7, (byte) (value >>> 56));
-            putByte(address + 6, (byte) (value >>> 48));
-            putByte(address + 5, (byte) (value >>> 40));
-            putByte(address + 4, (byte) (value >>> 32));
-            putByte(address + 3, (byte) (value >>> 24));
-            putByte(address + 2, (byte) (value >>> 16));
-            putByte(address + 1, (byte) (value >>> 8));
-            putByte(address, (byte) value);
-        }
+        UNSAFE.putLong(address, value);
+    }
+
+    static void putByte(byte[] data, int index, byte value) {
+        UNSAFE.putByte(data, BYTE_ARRAY_BASE_OFFSET + index, value);
+    }
+
+    static void putShort(byte[] data, int index, short value) {
+        UNSAFE.putShort(data, BYTE_ARRAY_BASE_OFFSET + index, value);
+    }
+
+    static void putInt(byte[] data, int index, int value) {
+        UNSAFE.putInt(data, BYTE_ARRAY_BASE_OFFSET + index, value);
+    }
+
+    static void putLong(byte[] data, int index, long value) {
+        UNSAFE.putLong(data, BYTE_ARRAY_BASE_OFFSET + index, value);
     }
 
     static void copyMemory(long srcAddr, long dstAddr, long length) {
@@ -330,8 +281,8 @@ final class PlatformDependent0 {
         if (len1 == 0) {
             return true;
         }
-        final long baseOffset1 = ARRAY_BASE_OFFSET + startPos1;
-        final long baseOffset2 = ARRAY_BASE_OFFSET + startPos2;
+        final long baseOffset1 = BYTE_ARRAY_BASE_OFFSET + startPos1;
+        final long baseOffset2 = BYTE_ARRAY_BASE_OFFSET + startPos2;
         int remainingBytes = len1 & 7;
         for (int i = len1 - 8; i >= remainingBytes; i -= 8) {
             if (UNSAFE.getLong(bytes1, baseOffset1 + i) != UNSAFE.getLong(bytes2, baseOffset2 + i)) {

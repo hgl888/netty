@@ -13,12 +13,20 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
+package io.netty.buffer;
 
-void throwRuntimeException(JNIEnv* env, char* message);
-void throwRuntimeExceptionErrorNo(JNIEnv* env, char* message, int errorNumber);
-void throwChannelExceptionErrorNo(JNIEnv* env, char* message, int errorNumber);
-void throwIOException(JNIEnv* env, char* message);
-void throwIOExceptionErrorNo(JNIEnv* env, char* message, int errorNumber);
-void throwClosedChannelException(JNIEnv* env);
-void throwOutOfMemoryError(JNIEnv* env);
-char* exceptionMessage(char* msg, int error);
+import org.junit.Test;
+
+import static org.junit.Assert.*;
+
+public class DefaultByteBufHolderTest {
+
+    @Test
+    public void testToString() {
+        ByteBufHolder holder = new DefaultByteBufHolder(Unpooled.buffer());
+        assertEquals(1, holder.refCnt());
+        assertNotNull(holder.toString());
+        assertTrue(holder.release());
+        assertNotNull(holder.toString());
+    }
+}

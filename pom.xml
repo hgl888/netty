@@ -696,7 +696,7 @@
       <dependency>
         <groupId>${project.groupId}</groupId>
         <artifactId>netty-tcnative</artifactId>
-        <version>1.1.33.Fork9</version>
+        <version>1.1.33.Fork10</version>
         <classifier>${tcnative.classifier}</classifier>
         <scope>compile</scope>
         <optional>true</optional>
@@ -887,6 +887,14 @@
         <groupId>org.tukaani</groupId>
         <artifactId>xz</artifactId>
         <version>1.5</version>
+      </dependency>
+
+      <!-- Test dependency for resolver-dns -->
+      <dependency>
+        <groupId>org.apache.directory.server</groupId>
+        <artifactId>apacheds-protocol-dns</artifactId>
+        <version>1.5.7</version>
+        <scope>test</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>

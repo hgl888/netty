@@ -62,7 +62,6 @@ public abstract class AbstractByteBufTest {
     private ByteBuf buffer;
 
     protected abstract ByteBuf newBuffer(int capacity);
-    protected abstract ByteBuf[] components();
 
     protected boolean discardReadBytesDoesNotMoveWritableBytes() {
         return true;
@@ -2044,7 +2043,7 @@ public abstract class AbstractByteBufTest {
 
     @Test(expected = IllegalReferenceCountException.class)
     public void testGetBytesAfterRelease() {
-        releasedBuffer().getBytes(0, releaseLater(buffer()));
+        releasedBuffer().getBytes(0, releaseLater(buffer(8)));
     }
 
     @Test(expected = IllegalReferenceCountException.class)
