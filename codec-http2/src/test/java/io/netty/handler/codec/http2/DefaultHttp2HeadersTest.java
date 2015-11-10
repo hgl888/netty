@@ -17,21 +17,21 @@
 package io.netty.handler.codec.http2;
 
 import io.netty.handler.codec.http2.Http2Headers.PseudoHeaderName;
-import io.netty.util.AsciiString;
 import org.junit.Test;
 
 import java.util.Map.Entry;
 
+import static io.netty.util.AsciiString.of;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static io.netty.util.AsciiString.of;
 
 public class DefaultHttp2HeadersTest {
 
     @Test
-    public void pseudoHeadersMustComeFirstWhenIterating() {
+    public void testPseudoHeadersMustComeFirstWhenIterating() {
         Http2Headers headers = newHeaders();
 
         verifyPseudoHeadersFirst(headers);
@@ -39,7 +39,7 @@ public class DefaultHttp2HeadersTest {
     }
 
     @Test
-    public void pseudoHeadersWithRemovePreservesPseudoIterationOrder() {
+    public void testPseudoHeadersWithRemovePreservesPseudoIterationOrder() {
         Http2Headers headers = newHeaders();
 
         Http2Headers nonPseudoHeaders = new DefaultHttp2Headers();
@@ -67,11 +67,73 @@ public class DefaultHttp2HeadersTest {
         }
     }
 
+    @Test
+    public void testPseudoHeadersWithClearDoesNotLeak() {
+        Http2Headers headers = newHeaders();
+
+        assertFalse(headers.isEmpty());
+        headers.clear();
+        assertTrue(headers.isEmpty());
+
+        // Combine 2 headers together, make sure pseudo headers stay up front.
+        headers.add("name1", "value1").scheme("nothing");
+        verifyPseudoHeadersFirst(headers);
+
+        Http2Headers other = new DefaultHttp2Headers().add("name2", "value2").authority("foo");
+        verifyPseudoHeadersFirst(other);
+
+        headers.add(other);
+        verifyPseudoHeadersFirst(headers);
+
+        // Make sure the headers are what we expect them to be, and no leaking behind the scenes.
+        assertEquals(4, headers.size());
+        assertEquals("value1", headers.get("name1"));
+        assertEquals("value2", headers.get("name2"));
+        assertEquals("nothing", headers.scheme());
+        assertEquals("foo", headers.authority());
+    }
+
+    @Test
+    public void testSetHeadersOrdersPsuedoHeadersCorrectly() {
+        Http2Headers headers = newHeaders();
+        Http2Headers other = new DefaultHttp2Headers().add("name2", "value2").authority("foo");
+
+        headers.set(other);
+        verifyPseudoHeadersFirst(headers);
+        assertEquals(other.size(), headers.size());
+        assertEquals("foo", headers.authority());
+        assertEquals("value2", headers.get("name2"));
+    }
+
+    @Test
+    public void testSetAllOrdersPsuedoHeadersCorrectly() {
+        Http2Headers headers = newHeaders();
+        Http2Headers other = new DefaultHttp2Headers().add("name2", "value2").authority("foo");
+
+        int headersSizeBefore = headers.size();
+        headers.setAll(other);
+        verifyPseudoHeadersFirst(headers);
+        verifyAllPseudoHeadersPresent(headers);
+        assertEquals(headersSizeBefore + 1, headers.size());
+        assertEquals("foo", headers.authority());
+        assertEquals("value2", headers.get("name2"));
+    }
+
     @Test(expected = Http2Exception.class)
     public void testHeaderNameValidation() {
         Http2Headers headers = newHeaders();
 
         headers.add(of("Foo"), of("foo"));
+    }
+
+    @Test
+    public void testClearResetsPseudoHeaderDivision() {
+        DefaultHttp2Headers http2Headers = new DefaultHttp2Headers();
+        http2Headers.method("POST");
+        http2Headers.set("some", "value");
+        http2Headers.clear();
+        http2Headers.method("GET");
+        assertEquals(1, http2Headers.names().size());
     }
 
     private static void verifyAllPseudoHeadersPresent(Http2Headers headers) {

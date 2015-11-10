@@ -20,6 +20,7 @@ import io.netty.util.ReferenceCountUtil;
 import io.netty.util.ResourceLeakDetector;
 import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.EventExecutorGroup;
+import io.netty.util.concurrent.FastThreadLocal;
 import io.netty.util.concurrent.PausableEventExecutor;
 import io.netty.util.internal.OneTimeTask;
 import io.netty.util.internal.PlatformDependent;
@@ -48,15 +49,13 @@ final class DefaultChannelPipeline implements ChannelPipeline {
 
     static final InternalLogger logger = InternalLoggerFactory.getInstance(DefaultChannelPipeline.class);
 
-    @SuppressWarnings("unchecked")
-    private static final WeakHashMap<Class<?>, String>[] nameCaches =
-            new WeakHashMap[Runtime.getRuntime().availableProcessors()];
-
-    static {
-        for (int i = 0; i < nameCaches.length; i ++) {
-            nameCaches[i] = new WeakHashMap<Class<?>, String>();
+    private static final FastThreadLocal<Map<Class<?>, String>> nameCaches =
+            new FastThreadLocal<Map<Class<?>, String>>() {
+        @Override
+        protected Map<Class<?>, String> initialValue() throws Exception {
+            return new WeakHashMap<Class<?>, String>();
         }
-    }
+    };
 
     final AbstractChannel channel;
 
@@ -367,15 +366,12 @@ final class DefaultChannelPipeline implements ChannelPipeline {
     }
 
     String generateName(ChannelHandler handler) {
-        WeakHashMap<Class<?>, String> cache = nameCaches[(int) (Thread.currentThread().getId() % nameCaches.length)];
+        Map<Class<?>, String> cache = nameCaches.get();
         Class<?> handlerType = handler.getClass();
-        String name;
-        synchronized (cache) {
-            name = cache.get(handlerType);
-            if (name == null) {
-                name = generateName0(handlerType);
-                cache.put(handlerType, name);
-            }
+        String name = cache.get(handlerType);
+        if (name == null) {
+            name = generateName0(handlerType);
+            cache.put(handlerType, name);
         }
 
         synchronized (this) {
@@ -871,35 +867,36 @@ final class DefaultChannelPipeline implements ChannelPipeline {
      * See: https://github.com/netty/netty/issues/3156
      */
     private void destroy() {
-        destroyUp(head.next);
+        destroyUp(head.next, false);
     }
 
-    private void destroyUp(AbstractChannelHandlerContext ctx) {
+    private void destroyUp(AbstractChannelHandlerContext ctx, boolean inEventLoop) {
         final Thread currentThread = Thread.currentThread();
         final AbstractChannelHandlerContext tail = this.tail;
         for (;;) {
             if (ctx == tail) {
-                destroyDown(currentThread, tail.prev);
+                destroyDown(currentThread, tail.prev, inEventLoop);
                 break;
             }
 
             final EventExecutor executor = ctx.executor();
-            if (!executor.inEventLoop(currentThread)) {
+            if (!inEventLoop && !executor.inEventLoop(currentThread)) {
                 final AbstractChannelHandlerContext finalCtx = ctx;
                 executor.unwrap().execute(new OneTimeTask() {
                     @Override
                     public void run() {
-                        destroyUp(finalCtx);
+                        destroyUp(finalCtx, true);
                     }
                 });
                 break;
             }
 
             ctx = ctx.next;
+            inEventLoop = false;
         }
     }
 
-    private void destroyDown(Thread currentThread, AbstractChannelHandlerContext ctx) {
+    private void destroyDown(Thread currentThread, AbstractChannelHandlerContext ctx, boolean inEventLoop) {
         // We have reached at tail; now traverse backwards.
         final AbstractChannelHandlerContext head = this.head;
         for (;;) {
@@ -908,7 +905,7 @@ final class DefaultChannelPipeline implements ChannelPipeline {
             }
 
             final EventExecutor executor = ctx.executor();
-            if (executor.inEventLoop(currentThread)) {
+            if (inEventLoop || executor.inEventLoop(currentThread)) {
                 synchronized (this) {
                     remove0(ctx);
                 }
@@ -917,13 +914,14 @@ final class DefaultChannelPipeline implements ChannelPipeline {
                 executor.unwrap().execute(new OneTimeTask() {
                     @Override
                     public void run() {
-                        destroyDown(Thread.currentThread(), finalCtx);
+                        destroyDown(Thread.currentThread(), finalCtx, true);
                     }
                 });
                 break;
             }
 
             ctx = ctx.prev;
+            inEventLoop = false;
         }
     }
 
